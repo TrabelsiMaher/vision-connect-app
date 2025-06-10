@@ -1,0 +1,160 @@
+version: '3.8'
+
+services:
+  # Base de données MongoDB
+  mongodb:
+    image: mongo:5.0
+    container_name: vision-connect-mongodb
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-vision}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-changeThisPassword}
+    volumes:
+      - /opt/vision-connect/mongodb:/data/db
+    networks:
+      - vision-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis pour la mise en cache et les sessions
+  redis:
+    image: redis:6.2-alpine
+    container_name: vision-connect-redis
+    restart: always
+    volumes:
+      - /opt/vision-connect/redis:/data
+    networks:
+      - vision-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Backend API
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: vision-connect-api:latest
+    container_name: vision-connect-api
+    restart: always
+    depends_on:
+      - mongodb
+      - redis
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi>M</mi><mi>O</mi><mi>N</mi><mi>G</mi><msub><mi>O</mi><mi>U</mi></msub><mi>S</mi><mi>E</mi><mi>R</mi><mi>N</mi><mi>A</mi><mi>M</mi><mi>E</mi><mo>:</mo><mo>−</mo><mi>v</mi><mi>i</mi><mi>s</mi><mi>i</mi><mi>o</mi><mi>n</mi></mrow><mo>:</mo></mrow><annotation encoding="application/x-tex">{MONGO_USERNAME:-vision}:</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">MONG</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0278em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.10903em;">U</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord mathnormal" style="margin-right:0.10903em;">SERN</span><span class="mord mathnormal">A</span><span class="mord mathnormal" style="margin-right:0.05764em;">ME</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord">−</span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span><span class="mord mathnormal">i</span><span class="mord mathnormal">s</span><span class="mord mathnormal">i</span><span class="mord mathnormal">o</span><span class="mord mathnormal">n</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span></span></span></span>{MONGO_PASSWORD:-changeThisPassword}@mongodb:27017/vision?authSource=admin
+      - REDIS_URI=redis://redis:6379
+      - API_DOMAIN=api.vision-connect.net
+      - CALL_DOMAIN=call.vision-connect.net
+      - ADMIN_DOMAIN=admin.vision-connect.net
+      - TURN_URI=turn:turn.vision-connect.net:3478
+      - TURN_USERNAME=${TURN_USERNAME:-vision}
+      - TURN_PASSWORD=${TURN_PASSWORD:-changeThisTurnPassword}
+      - JWT_SECRET=${JWT_SECRET:-changeThisSecretKey}
+    networks:
+      - vision-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Frontend principal
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        - API_URL=https://api.vision-connect.net
+    image: vision-connect-frontend:latest
+    container_name: vision-connect-frontend
+    restart: always
+    depends_on:
+      - api
+    networks:
+      - vision-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Interface d'administration
+  admin:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.admin
+      args:
+        - API_URL=https://api.vision-connect.net
+    image: vision-connect-admin:latest
+    container_name: vision-connect-admin
+    restart: always
+    depends_on:
+      - api
+    networks:
+      - vision-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Serveur TURN pour la traversée NAT
+  coturn:
+    build:
+      context: ../turn-server
+      dockerfile: Dockerfile
+    image: vision-connect-turn:latest
+    container_name: vision-connect-turn
+    restart: always
+    environment:
+      - TURN_USERNAME=${TURN_USERNAME:-vision}
+      - TURN_PASSWORD=${TURN_PASSWORD:-changeThisTurnPassword}
+    volumes:
+      - /opt/vision-connect/turn:/var/lib/coturn
+    networks:
+      - vision-network
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49152-65535:49152-65535/udp"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Nginx pour la gestion des domaines et du SSL
+  nginx:
+    image: nginx:1.21-alpine
+    container_name: vision-connect-nginx
+    restart: always
+    depends_on:
+      - frontend
+      - api
+      - admin
+      - coturn
+    volumes:
+      - /opt/vision-connect/nginx/conf.d:/etc/nginx/conf.d
+      - /opt/vision-connect/nginx/html:/usr/share/nginx/html
+      - /opt/vision-connect/ssl:/etc/nginx/ssl
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - vision-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  vision-network:
+    driver: bridge
