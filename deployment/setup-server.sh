@@ -57,7 +57,7 @@ sudo ufw --force enable
 # Création des répertoires pour les volumes Docker
 echo "[7/7] Création des répertoires pour les données persistantes..."
 sudo mkdir -p /opt/vision-connect/{mongodb,redis,nginx,turn,ssl}
-sudo chown -R <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>U</mi><mi>S</mi><mi>E</mi><mi>R</mi><mo>:</mo></mrow><annotation encoding="application/x-tex">USER:</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">U</span><span class="mord mathnormal" style="margin-right:0.00773em;">SER</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span></span></span></span>USER /opt/vision-connect
+sudo chown -R $USER:$USER /opt/vision-connect
 
 
 echo "Installation des dépendances terminée !"
