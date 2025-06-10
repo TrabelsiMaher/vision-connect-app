@@ -18,7 +18,7 @@ Ce guide explique comment déployer l'application Vision Connect sur votre serve
 
 ```bash
 # Cloner le dépôt
-git clone https://github.com/votreutilisateur/vision-connect-app.git
+git clone https://github.com/TrabelsiMaher/vision-connect-app.git
 cd vision-connect-app
 
 # Rendre les scripts exécutables
